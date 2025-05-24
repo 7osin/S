@@ -1,70 +1,241 @@
-import { auth, db } from './firebase-config.js';
-import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
-import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <title>لوحة تحكم الادمن - فروع الشجرة</title>
+  <style>
+    body { font-family: 'Tajawal', sans-serif; direction: rtl; background:#f3f7fb; padding:20px; }
+    h1 { text-align:center; color:#0b3d91; margin-bottom:40px; }
+    #logoutBtn { background:#d9534f; border:none; color:#fff; padding:10px 18px; border-radius:6px; cursor:pointer; float:left; margin-bottom:20px; }
+    #branchesList { max-width:900px; margin:0 auto 40px; background:#fff; padding:20px; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.08);}
+    .branch-item { border-bottom:1px solid #ddd; padding:12px 0; display:flex; justify-content:space-between; flex-wrap:wrap; }
+    .branch-item:last-child { border-bottom:none; }
+    .branch-info { max-width:70%; }
+    .branch-actions button { margin-left:10px; padding:8px 14px; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
+    .editBtn { background:#007bff; color:#fff; }
+    .deleteBtn { background:#dc3545; color:#fff; }
+    form { max-width:900px; margin:0 auto; background:#fff; padding:25px 30px; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.08); }
+    label { display:block; margin-top:12px; font-weight:700; color:#0b3d91; }
+    input[type="text"], textarea { width:100%; padding:10px; border:1.8px solid #a5b2d9; border-radius:10px; font-size:16px; resize:vertical; }
+    textarea { height:80px; }
+    input[type="file"] { margin-top:8px; }
+    button[type="submit"] { margin-top:20px; background:#004aad; color:#fff; padding:12px 25px; font-weight:700; border-radius:10px; cursor:pointer; font-size:18px; }
+    #statusMessage { margin-top:12px; font-weight:700; color:#007bff; min-height:24px; }
+  </style>
+</head>
+<body>
 
-const titleInput = document.getElementById('titleInput');
-const contentInput = document.getElementById('contentInput');
-const videoInput = document.getElementById('videoInput');
-const downloadInput = document.getElementById('downloadInput');
-const saveBtn = document.getElementById('saveBtn');
-const message = document.getElementById('message');
-const logoutBtn = document.getElementById('logoutBtn');
+  <button id="logoutBtn" title="تسجيل الخروج">تسجيل خروج</button>
+  <h1>لوحة تحكم فروع الشجرة</h1>
 
-// تأكد من وجود مستخدم مسجل دخول
-onAuthStateChanged(auth, user => {
-  if (!user) {
-    alert('يجب تسجيل الدخول أولاً');
-    window.location.href = 'index.html';
-  } else {
-    loadData();
-  }
-});
+  <section id="branchesList" aria-label="قائمة الفروع">
+    <p>جارٍ تحميل الفروع ...</p>
+  </section>
 
-// تحميل البيانات من Firestore للادخال
-async function loadData() {
-  const docRef = doc(db, "blog", "main");
-  const docSnap = await getDoc(docRef);
+  <form id="branchForm" aria-label="إضافة / تعديل فرع">
+    <input type="hidden" id="branchId" />
+    <label for="titleInput">عنوان الفرع</label>
+    <input type="text" id="titleInput" placeholder="أدخل عنوان الفرع" required />
 
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    titleInput.value = data.title || '';
-    contentInput.value = data.content || '';
-    videoInput.value = data.video || '';
-    downloadInput.value = data.download || '';
-  }
-}
+    <label for="contentInput">محتوى الفرع</label>
+    <textarea id="contentInput" placeholder="أدخل المحتوى" required></textarea>
 
-// حفظ البيانات في Firestore
-saveBtn.addEventListener('click', async () => {
-  const title = titleInput.value.trim();
-  const content = contentInput.value.trim();
-  const video = videoInput.value.trim();
-  const download = downloadInput.value.trim();
+    <label for="videoInput">رابط فيديو (يوتيوب أو رابط مباشر)</label>
+    <input type="text" id="videoInput" placeholder="https://..." />
 
-  if (!title || !content) {
-    message.style.color = 'red';
-    message.textContent = 'العنوان والمحتوى مطلوبان!';
-    return;
-  }
+    <label for="downloadInput">رفع ملف للتحميل (اختياري)</label>
+    <input type="file" id="downloadInput" accept="*/*" />
 
-  try {
-    await setDoc(doc(db, "blog", "main"), {
-      title,
-      content,
-      video,
-      download
+    <button type="submit" id="saveBtn">حفظ الفرع</button>
+
+    <p id="statusMessage"></p>
+  </form>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+  apiKey: "AIzaSyCjdo5ncnxd5o6aeFFFoExIGzt6kC5NOf8",
+  authDomain: "k1ma-ea69c.firebaseapp.com",
+  projectId: "k1ma-ea69c",
+  storageBucket: "k1ma-ea69c.firebasestorage.app",
+  messagingSenderId: "913229044390",
+  appId: "1:913229044390:web:0d0719def89b718ca23267",
+  measurementId: "G-ZERLLV6CSR"
+};
+    firebase.initializeApp(firebaseConfig);
+
+    const auth = firebase.auth();
+    const database = firebase.database();
+    const storage = firebase.storage();
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    const branchesList = document.getElementById('branchesList');
+    const branchForm = document.getElementById('branchForm');
+    const branchIdInput = document.getElementById('branchId');
+    const titleInput = document.getElementById('titleInput');
+    const contentInput = document.getElementById('contentInput');
+    const videoInput = document.getElementById('videoInput');
+    const downloadInput = document.getElementById('downloadInput');
+    const saveBtn = document.getElementById('saveBtn');
+    const statusMessage = document.getElementById('statusMessage');
+
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        window.location.href = 'index.html';
+      }
     });
-    message.style.color = 'green';
-    message.textContent = 'تم حفظ التعديلات بنجاح!';
-  } catch (error) {
-    message.style.color = 'red';
-    message.textContent = 'خطأ في الحفظ: ' + error.message;
-  }
-});
 
-// تسجيل خروج
-logoutBtn.addEventListener('click', () => {
-  signOut(auth).then(() => {
-    window.location.href = 'index.html';
-  });
-});
+    logoutBtn.onclick = () => {
+      auth.signOut().then(() => window.location.href = 'index.html');
+    };
+
+    function renderBranches(data) {
+      branchesList.innerHTML = '';
+      if (!data) {
+        branchesList.innerHTML = '<p>لا توجد فروع حالياً.</p>';
+        return;
+      }
+      const keys = Object.keys(data);
+      if (keys.length === 0) {
+        branchesList.innerHTML = '<p>لا توجد فروع حالياً.</p>';
+        return;
+      }
+      keys.forEach(key => {
+        const b = data[key];
+        const div = document.createElement('div');
+        div.className = 'branch-item';
+        div.innerHTML = `
+          <div class="branch-info">
+            <strong>العنوان:</strong> ${b.title}<br/>
+            <strong>المحتوى:</strong> ${b.content.substring(0,80)}${b.content.length>80?'...':''}<br/>
+            <strong>فيديو:</strong> ${b.videoUrl ? `<a href="${b.videoUrl}" target="_blank">رابط</a>` : 'لا يوجد'}<br/>
+            <strong>تحميل:</strong> ${b.downloadUrl ? `<a href="${b.downloadUrl}" target="_blank">ملف</a>` : 'لا يوجد'}
+          </div>
+          <div class="branch-actions">
+            <button class="editBtn" data-id="${key}">تعديل</button>
+            <button class="deleteBtn" data-id="${key}">حذف</button>
+          </div>
+        `;
+        branchesList.appendChild(div);
+      });
+
+      document.querySelectorAll('.editBtn').forEach(b => {
+        b.onclick = e => loadBranchToForm(e.target.dataset.id);
+      });
+      document.querySelectorAll('.deleteBtn').forEach(b => {
+        b.onclick = e => {
+          if(confirm('هل تريد حذف هذا الفرع؟')) {
+            database.ref('branches/'+e.target.dataset.id).remove();
+            statusMessage.textContent = 'تم حذف الفرع.';
+          }
+        };
+      });
+    }
+
+    database.ref('branches').on('value', snapshot => {
+      renderBranches(snapshot.val());
+    });
+
+    function loadBranchToForm(id) {
+      database.ref('branches/'+id).once('value').then(snap => {
+        const data = snap.val();
+        if (!data) return;
+        branchIdInput.value = id;
+        titleInput.value = data.title || '';
+        contentInput.value = data.content || '';
+        videoInput.value = data.videoUrl || '';
+        downloadInput.value = '';
+        statusMessage.textContent = 'تم تحميل بيانات الفرع.';
+        setTimeout(() => statusMessage.textContent = '', 2000);
+      });
+    }
+
+    async function uploadFile(file) {
+      if (!file) return null;
+      const ref = storage.ref('downloads/' + Date.now() + '-' + file.name);
+      const snap = await ref.put(file);
+      return await snap.ref.getDownloadURL();
+    }
+
+    branchForm.onsubmit = async e => {
+      e.preventDefault();
+      saveBtn.disabled = true;
+      statusMessage.textContent = 'جارٍ الحفظ...';
+
+      const id = branchIdInput.value.trim();
+      const title = titleInput.value.trim();
+      const content = contentInput.value.trim();
+      const videoUrl = videoInput.value.trim();
+
+      try {
+        let downloadUrl = null;
+        if(downloadInput.files.length > 0) {
+          downloadUrl = await uploadFile(downloadInput.files[0]);
+        }
+        const branchData = { title, content, videoUrl };
+        if(downloadUrl) branchData.downloadUrl = downloadUrl;
+
+        if(id) await database.ref('branches/' + id).update(branchData);
+        else await database.ref('branches').push(branchData);
+
+        statusMessage.textContent = id ? 'تم تحديث الفرع.' : 'تم إضافة فرع جديد.';
+        branchForm.reset();
+        branchIdInput.value = '';
+
+      } catch(err) {
+        statusMessage.textContent = 'خطأ أثناء الحفظ: ' + err.message;
+      } finally {
+        saveBtn.disabled = false;
+        setTimeout(() => statusMessage.textContent = '', 4000);
+      }
+   
+ }
+ 
+  </script>
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>لوحة تحكم الأدمن - سجل الدخول</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    direction: rtl;
+    padding: 20px;
+    background: #f0f0f0;
+  }
+  h1 {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+  }
+  th, td {
+    padding: 12px;
+    border: 1px solid #ddd;
+    text-align: center;
+  }
+  th {
+    background-color: #243b55;
+    color: white;
+  }
+  .success {
+    color: green;
+    font-weight: bold;
+  }
+  .failure {
+    color: red;
+    font-weight: bold;
+  }
+</style>
+</head>
+<<body>
+</html>
