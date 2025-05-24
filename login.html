@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>تسجيل دخول الأدمن - Firebase</title>
+<style>
+  body { font-family: Arial, sans-serif; direction: rtl; display: flex; justify-content: center; align-items: center; height: 100vh; background: #243b55; color: white; }
+  .login-container { background: rgba(0,0,0,0.7); padding: 30px; border-radius: 10px; width: 320px; text-align: center; }
+  input, button { width: 100%; padding: 10px; margin: 10px 0; border-radius: 6px; border: none; }
+  button { background: #b8860b; color: black; font-weight: bold; cursor: pointer; }
+  button:hover { background: #ffd700; }
+  .error { color: #ff4d4d; }
+</style>
+</head>
+<body>
+  <div class="login-container">
+    <h2>تسجيل دخول الأدمن</h2>
+    <input type="email" id="email" placeholder="البريد الإلكتروني" required />
+    <input type="password" id="password" placeholder="كلمة المرور" required />
+    <button id="loginBtn">دخول</button>
+    <p class="error" id="error"></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCjdo5ncnxd5o6aeFFFoExIGzt6kC5NOf8",
+      authDomain: "k1ma-ea69c.firebaseapp.com",
+      projectId: "k1ma-ea69c",
+      storageBucket: "k1ma-ea69c.firebasestorage.app",
+      messagingSenderId: "913229044390",
+      appId: "1:913229044390:web:0d0719def89b718ca23267",
+      measurementId: "G-ZERLLV6CSR"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const loginBtn = document.getElementById('loginBtn');
+    const errorEl = document.getElementById('error');
+
+    // دالة لتسجيل محاولة الدخول في Firestore
+    async function logLoginAttempt(email, status, errorMsg = "") {
+      try {
+        await addDoc(collection(db, "content", "main", "loginLogs"), {
+          email: email,
+          status: status,        // "نجاح" أو "فشل"
+          error: errorMsg,
+          timestamp: serverTimestamp(),
+        });
+        console.log("تم تسجيل محاولة الدخول");
+      } catch (e) {
+        console.error("خطأ في تسجيل الدخول:", e);
+      }
+    }
+
+    loginBtn.addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      errorEl.textContent = '';
+
+      if (!email || !password) {
+        errorEl.textContent = "يرجى إدخال البريد الإلكتروني وكلمة المرور";
+        return;
+      }
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        await logLoginAttempt(email, "نجاح");
+        window.location.href = 'admin.html';
+      } catch (error) {
+        await logLoginAttempt(email, "فشل", error.message);
+        errorEl.textContent = error.message;
+      }
+    });
+
+    // إعادة التوجيه إذا المستخدم مسجل دخول مسبقًا
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        window.location.href = 'admin.html';
+      }
+    });
+  </script>
+</body>
+</html>
